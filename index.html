@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML-DSA-65 WebAssembly Demo</title>
+    <style>
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #007acc;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .output-box {
+            background: #fefefe;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            color: #007acc;
+            margin-top: 30px;
+        }
+
+        .tab-bar {
+            display: flex;
+            border-bottom: 1px solid #bdbdbd;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .tab {
+            background: #f5f5f5;
+            color: #007acc;
+            border: 1px solid #bdbdbd;
+            border-radius: 6px;
+            padding: 6px 18px 6px 18px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-right: 2px;
+            min-width: 48px;
+            outline: none;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .tab.active {
+            background: #fff;
+            color: #222;
+            font-weight: bold;
+            z-index: 2;
+        }
+
+        .tab:hover {
+            background: #e0e0e0;
+        }
+
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background: #005a9e;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success {
+            color: #2e7d32;
+            background: #e8f5e8;
+            border: 1px solid #c8e6c9;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .step {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #007acc;
+            background: #f9f9f9;
+        }
+
+        .benchmark {
+            background: #fff3e0;
+            border: 1px solid #ff9800;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        textarea {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007acc;
+            box-shadow: 0 0 5px rgba(0, 122, 204, 0.3);
+        }
+
+        input[type="text"] {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #007acc;
+            box-shadow: 0 0 5px rgba(0, 122, 204, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>ML-DSA-65 WebAssembly Demo</h1>
+
+        <div class="info-box">
+            <strong>About ML-DSA-65:</strong><br>
+            ML-DSA-65 (formerly Dilithium3) is a quantum-resistant digital signature algorithm
+            standardized by NIST. This demo shows the WebAssembly implementation running
+            directly in your browser. (Also available as <code>mldsa</code> in the browser's console.)
+            <br><br>
+            Source code and docs: <a href="https://github.com/dchest/mldsa-wasm">github.com/dchest/mldsa-wasm</a>
+            <br>
+            Package: <code>npm install mldsa-wasm</code>
+        </div>
+
+        <h2>Algorithm Information</h2>
+        <div id="algorithmInfo" class="output-box loading">Loading WASM module...</div>
+
+        <h2>Digital Signature Demo</h2>
+
+        <div class="step">
+            <h3>Step 1: Generate Key Pair</h3>
+            <button id="generateKeypair" disabled>Generate Key Pair</button>
+            <div id="keypairTabs">
+                <div class="tab-bar" id="tab-bar" style="display:none;">
+                    <button class="tab" id="tab-hex" data-tab="hex" disabled>Raw (hex)</button>
+                    <button class="tab" id="tab-jwk" data-tab="jwk" disabled>JWK</button>
+                    <button class="tab" id="tab-spki" data-tab="spki" disabled>SPKI (PEM)</button>
+                    <button class="tab" id="tab-pkcs8" data-tab="pkcs8" disabled>PKCS8 (PEM)</button>
+                </div>
+            </div>
+            <div id="keypairOutput"></div>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Sign Message</h3>
+            <textarea id="messageInput" placeholder="Enter message to sign..."
+                style="width: 100%; height: 80px; margin: 10px 0; padding: 10px; font-family: inherit;">Hello, this is a test message for ML-DSA-65 digital signature!</textarea>
+            <label for="contextInput" style="display: block; margin-top: 10px; font-weight: bold;">Context
+                (optional):</label>
+            <input id="contextInput" type="text" placeholder="Enter context string (optional, max 255 bytes)..."
+                style="width: 100%; margin: 5px 0 10px 0; padding: 10px; font-family: inherit;">
+            <button id="signMessage" disabled>Sign Message</button>
+            <div id="signOutput"></div>
+        </div>
+
+        <div class="step">
+            <h3>Step 3: Verify Signature</h3>
+            <button id="verifySignature" disabled>Verify Signature</button>
+            <div id="verifyOutput"></div>
+        </div>
+
+        <h2>Performance Benchmark</h2>
+        <button id="benchmark" disabled>Run Benchmark</button>
+        <div id="benchmarkOutput"></div>
+    </div>
+
+    <script type="module">
+        import mldsa from './dist/mldsa.js';
+
+        // Make it available in console.
+        window.mldsa = mldsa;
+
+        let keypair = null;
+        let signature = null;
+        let message = null;
+        let signAlgorithm = null;
+
+        // Utility functions
+        function bytesToHex(bytes) {
+            return Array.from(new Uint8Array(bytes))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        function bytesToBase64(bytes) {
+            return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+        }
+
+        function formatPEM(base64, label) {
+            const lines = [];
+            lines.push(`-----BEGIN ${label}-----`);
+            for (let i = 0; i < base64.length; i += 64) {
+                lines.push(base64.substr(i, 64));
+            }
+            lines.push(`-----END ${label}-----`);
+            return lines.join('\n');
+        }
+
+        function arraysEqual(a, b) {
+            a = new Uint8Array(a);
+            b = new Uint8Array(b);
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i++) {
+                if (a[i] !== b[i]) return false;
+            }
+            return true;
+        }
+
+        function formatBytes(bytes) {
+            return `${bytes} bytes`;
+        }
+
+        function showOutput(elementId, content, className = '') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = content;
+            element.className = content ? 'output-box ' + className : className;
+        }
+
+        function showError(elementId, message) {
+            showOutput(elementId, `❌ Error: ${message}`, 'error');
+        }
+
+        function showSuccess(elementId, message) {
+            showOutput(elementId, `✅ ${message}`, 'success');
+        }
+
+        // Show algorithm info
+        document.getElementById('algorithmInfo').innerHTML = `
+            <strong>Algorithm:</strong> ML-DSA-65<br>
+            <strong>Public Key Size:</strong> 1952 bytes<br>
+            <strong>Secret Key Size:</strong> 32 bytes (seed)<br>
+            <strong>Signature Size:</strong> 3309 bytes<br>
+            <strong>Security Level:</strong> NIST Level 3
+        `;
+        document.getElementById('algorithmInfo').className = 'output-box';
+        document.getElementById('generateKeypair').disabled = false;
+        document.getElementById('benchmark').disabled = false;
+
+        // Event handlers
+        document.getElementById('generateKeypair').addEventListener('click', async () => {
+            // Clear all outputs and reset UI
+            showOutput('keypairOutput', '');
+            showOutput('signOutput', '');
+            showOutput('verifyOutput', '');
+            signAlgorithm = null;
+            document.getElementById('signMessage').disabled = true;
+            document.getElementById('verifySignature').disabled = true;
+            document.getElementById('tab-bar').style.display = 'none';
+            document.getElementById('tab-hex').disabled = true;
+            document.getElementById('tab-jwk').disabled = true;
+            document.getElementById('tab-spki').disabled = true;
+            document.getElementById('tab-pkcs8').disabled = true;
+
+            try {
+                const start = performance.now();
+                keypair = await mldsa.generateKey(
+                    { name: 'ML-DSA-65' },
+                    true,
+                    ['sign', 'verify']
+                );
+                const time = performance.now() - start;
+
+                // Prepare hex and JWK exports
+                const publicKey = new Uint8Array(await mldsa.exportKey('raw-public', keypair.publicKey));
+                const privateKey = new Uint8Array(await mldsa.exportKey('raw-seed', keypair.privateKey));
+
+                // Export JWK private key (which includes public key)
+                const privateKeyJwk = await mldsa.exportKey('jwk', keypair.privateKey);
+
+                // Export SPKI and PKCS8 formats
+                const spkiBytes = new Uint8Array(await mldsa.exportKey('spki', keypair.publicKey));
+                const pkcs8Bytes = new Uint8Array(await mldsa.exportKey('pkcs8', keypair.privateKey));
+
+                // Convert to PEM format
+                const spkiPem = formatPEM(bytesToBase64(spkiBytes), 'PUBLIC KEY');
+                const pkcs8Pem = formatPEM(bytesToBase64(pkcs8Bytes), 'PRIVATE KEY');
+
+                // Tab state
+                let currentTab = 'hex';
+                document.getElementById('tab-bar').style.display = '';
+                document.getElementById('tab-hex').disabled = false;
+                document.getElementById('tab-jwk').disabled = false;
+                document.getElementById('tab-spki').disabled = false;
+                document.getElementById('tab-pkcs8').disabled = false;
+                document.getElementById('tab-hex').classList.add('active');
+                document.getElementById('tab-jwk').classList.remove('active');
+                document.getElementById('tab-spki').classList.remove('active');
+                document.getElementById('tab-pkcs8').classList.remove('active');
+
+                function renderKeypairTab(tab) {
+                    if (tab === 'hex') {
+                        showOutput('keypairOutput', `
+                            <strong>⏱️ Generated in ${time.toFixed(2)}ms</strong><br><br>
+                            <strong>Public Key (${publicKey.length} bytes):</strong><br>
+                            ${bytesToHex(publicKey)}<br><br>
+                            <strong>Private Key (${privateKey.length} bytes):</strong><br>
+                            ${bytesToHex(privateKey)}
+                        `);
+                    } else if (tab === 'jwk') {
+                        showOutput('keypairOutput', `
+                            <strong>⏱️ Generated in ${time.toFixed(2)}ms</strong><br><br>
+                            <strong>Private Key (JWK):</strong><br>
+                            <pre>${JSON.stringify(privateKeyJwk, null, 2)}</pre>
+                        `);
+                    } else if (tab === 'spki') {
+                        showOutput('keypairOutput', `
+                            <strong>⏱️ Generated in ${time.toFixed(2)}ms</strong><br><br>
+                            <strong>Public Key (SPKI PEM format, ${spkiBytes.length} bytes DER):</strong><br>
+                            <pre>${spkiPem}</pre>
+                        `);
+                    } else if (tab === 'pkcs8') {
+                        showOutput('keypairOutput', `
+                            <strong>⏱️ Generated in ${time.toFixed(2)}ms</strong><br><br>
+                            <strong>Private Key (PKCS#8 PEM format, ${pkcs8Bytes.length} bytes DER):</strong><br>
+                            <pre>${pkcs8Pem}</pre>
+                        `);
+                    }
+                }
+
+                renderKeypairTab(currentTab);
+
+                document.getElementById('tab-hex').onclick = function () {
+                    currentTab = 'hex';
+                    document.getElementById('tab-hex').classList.add('active');
+                    document.getElementById('tab-jwk').classList.remove('active');
+                    document.getElementById('tab-spki').classList.remove('active');
+                    document.getElementById('tab-pkcs8').classList.remove('active');
+                    renderKeypairTab('hex');
+                };
+                document.getElementById('tab-jwk').onclick = function () {
+                    currentTab = 'jwk';
+                    document.getElementById('tab-jwk').classList.add('active');
+                    document.getElementById('tab-hex').classList.remove('active');
+                    document.getElementById('tab-spki').classList.remove('active');
+                    document.getElementById('tab-pkcs8').classList.remove('active');
+                    renderKeypairTab('jwk');
+                };
+                document.getElementById('tab-spki').onclick = function () {
+                    currentTab = 'spki';
+                    document.getElementById('tab-spki').classList.add('active');
+                    document.getElementById('tab-hex').classList.remove('active');
+                    document.getElementById('tab-jwk').classList.remove('active');
+                    document.getElementById('tab-pkcs8').classList.remove('active');
+                    renderKeypairTab('spki');
+                };
+                document.getElementById('tab-pkcs8').onclick = function () {
+                    currentTab = 'pkcs8';
+                    document.getElementById('tab-pkcs8').classList.add('active');
+                    document.getElementById('tab-hex').classList.remove('active');
+                    document.getElementById('tab-jwk').classList.remove('active');
+                    document.getElementById('tab-spki').classList.remove('active');
+                    renderKeypairTab('pkcs8');
+                };
+
+                document.getElementById('signMessage').disabled = false;
+            } catch (error) {
+                showError('keypairOutput', error.message);
+            }
+        });
+
+
+        document.getElementById('signMessage').addEventListener('click', async () => {
+            // Clear verification outputs, reset UI
+            showOutput('verifyOutput', '');
+            document.getElementById('verifySignature').disabled = true;
+
+            if (!keypair) {
+                showError('signOutput', 'Please generate key pair first');
+                return;
+            }
+            try {
+                const messageText = document.getElementById('messageInput').value || 'Hello, this is a test message for ML-DSA-65 digital signature!';
+                const contextText = document.getElementById('contextInput').value;
+                message = new TextEncoder().encode(messageText);
+
+                // Prepare algorithm parameter with optional context
+                const algorithm = { name: 'ML-DSA-65' };
+                if (contextText) {
+                    algorithm.context = new TextEncoder().encode(contextText);
+                }
+                signAlgorithm = algorithm; // Store for verification
+
+                const start = performance.now();
+                signature = await mldsa.sign(
+                    algorithm,
+                    keypair.privateKey,
+                    message
+                );
+                const time = performance.now() - start;
+
+                const signatureBytes = new Uint8Array(signature);
+
+                showOutput('signOutput', `
+                    <strong>⏱️ Signed message in ${time.toFixed(2)}ms</strong><br><br>
+                    <strong>Message (${message.length} bytes):</strong><br>
+                    "${messageText}"<br><br>
+                    ${contextText ? `<strong>Context:</strong><br>"${contextText}"<br><br>` : ''}
+                    <strong>Message (hex):</strong><br>
+                    ${bytesToHex(message)}<br><br>
+                    ${contextText ? `<strong>Context (hex):</strong><br>${bytesToHex(algorithm.context)}<br><br>` : ''}
+                    <strong>Signature (${signatureBytes.length} bytes):</strong><br>
+                    ${bytesToHex(signatureBytes)}
+                `);
+
+                document.getElementById('verifySignature').disabled = false;
+            } catch (error) {
+                showError('signOutput', error.message);
+            }
+        });
+
+        document.getElementById('verifySignature').addEventListener('click', async () => {
+            if (!keypair || !signature) {
+                showError('verifyOutput', 'Please complete signing first');
+                return;
+            }
+            try {
+                // Read current values from input fields
+                const currentMessageText = document.getElementById('messageInput').value || 'Hello, this is a test message for ML-DSA-65 digital signature!';
+                const currentContextText = document.getElementById('contextInput').value;
+                const currentMessage = new TextEncoder().encode(currentMessageText);
+
+                // Prepare algorithm parameter with current context
+                const verifyAlgorithm = { name: 'ML-DSA-65' };
+                if (currentContextText) {
+                    verifyAlgorithm.context = new TextEncoder().encode(currentContextText);
+                }
+
+                const start = performance.now();
+                const isValidSignature = await mldsa.verify(
+                    verifyAlgorithm,
+                    keypair.publicKey,
+                    signature,
+                    currentMessage
+                );
+                const time = performance.now() - start;
+
+                // Show what was used for verification vs what was used for signing
+                const signContextText = signAlgorithm && signAlgorithm.context ?
+                    new TextDecoder().decode(signAlgorithm.context) : '';
+                const verifyContextText = currentContextText;
+
+                const signMessageText = message ? new TextDecoder().decode(message) : '';
+
+                const messageChanged = currentMessageText !== signMessageText;
+                const contextChanged = currentContextText !== signContextText;
+
+                showOutput('verifyOutput', `
+                    <strong>⏱️ Verified signature in ${time.toFixed(2)}ms</strong><br><br>
+                    <strong>Verification Result:</strong> ${isValidSignature ? '✅ Valid' : '❌ Invalid'}<br><br>
+
+                    <strong>Message for verification${messageChanged ? ' (CHANGED)' : ''}:</strong><br>
+                    "${currentMessageText}"<br><br>
+
+                    <strong>Context for verification${contextChanged ? ' (CHANGED)' : ''}:</strong><br>
+                    ${currentContextText ? `"${currentContextText}"` : '(none)'}<br><br>
+
+                    ${messageChanged || contextChanged ?
+                        `<strong>⚠️ Note:</strong> Message or context differs from signing time<br><br>` :
+                        ''}
+                `);
+            } catch (error) {
+                showError('verifyOutput', error.message);
+            }
+        });
+
+        document.getElementById('benchmark').addEventListener('click', async () => {
+            const iterations = 5000;
+            showOutput('benchmarkOutput', '🏃 Running benchmark...', 'loading');
+            setTimeout(async () => {
+                try {
+                    let keypairTime = 0;
+                    let signTime = 0;
+                    let verifyTime = 0;
+
+                    // Benchmark keypair generation
+                    const start1 = performance.now();
+                    for (let i = 0; i < iterations; i++) {
+                        await mldsa.generateKey(
+                            { name: 'ML-DSA-65' },
+                            true,
+                            ['sign', 'verify']
+                        );
+                    }
+                    keypairTime = performance.now() - start1;
+
+                    // Generate a keypair for sign/verify benchmark
+                    const benchKeypair = await mldsa.generateKey(
+                        { name: 'ML-DSA-65' },
+                        true,
+                        ['sign', 'verify']
+                    );
+
+                    // Test message for benchmark
+                    const testMessage = new TextEncoder().encode('This is a test message for benchmarking ML-DSA-65 performance.');
+
+                    // Benchmark signing
+                    const start2 = performance.now();
+                    for (let i = 0; i < iterations; i++) {
+                        await mldsa.sign(
+                            { name: 'ML-DSA-65' },
+                            benchKeypair.privateKey,
+                            testMessage
+                        );
+                    }
+                    signTime = performance.now() - start2;
+
+                    // Benchmark verification
+                    const benchSignature = await mldsa.sign(
+                        { name: 'ML-DSA-65' },
+                        benchKeypair.privateKey,
+                        testMessage
+                    );
+                    const start3 = performance.now();
+                    for (let i = 0; i < iterations; i++) {
+                        await mldsa.verify(
+                            { name: 'ML-DSA-65' },
+                            benchKeypair.publicKey,
+                            benchSignature,
+                            testMessage
+                        );
+                    }
+                    verifyTime = performance.now() - start3;
+
+                    showOutput('benchmarkOutput', `
+                        <div class="benchmark">
+                        <strong>🏁 Benchmark Results (${iterations} iterations each):</strong><br><br>
+                        <strong>Keypair Generation:</strong><br>
+                        • Total: ${keypairTime.toFixed(2)}ms<br>
+                        • Average: ${(keypairTime / iterations).toFixed(2)}ms per operation<br>
+                        • Throughput: ${(iterations * 1000 / keypairTime).toFixed(0)} ops/sec<br><br>
+
+                        <strong>Signing:</strong><br>
+                        • Total: ${signTime.toFixed(2)}ms<br>
+                        • Average: ${(signTime / iterations).toFixed(2)}ms per operation<br>
+                        • Throughput: ${(iterations * 1000 / signTime).toFixed(0)} ops/sec<br><br>
+
+                        <strong>Verification:</strong><br>
+                        • Total: ${verifyTime.toFixed(2)}ms<br>
+                        • Average: ${(verifyTime / iterations).toFixed(2)}ms per operation<br>
+                        • Throughput: ${(iterations * 1000 / verifyTime).toFixed(0)} ops/sec<br>
+                        </div>
+                    `);
+                } catch (error) {
+                    showError('benchmarkOutput', error.message);
+                }
+            }, 100);
+        });
+    </script>
+</body>
+
+</html>
