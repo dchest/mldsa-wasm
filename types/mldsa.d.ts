@@ -14,7 +14,7 @@ declare function exportKey(format: Exclude<MlDsaKeyFormat, "jwk">, // other form
 key: CryptoKey): Promise<ArrayBuffer>;
 declare function importKey(format: "jwk", keyData: JsonWebKey, algorithm: MlDsaAlgorithm, extractable: boolean, usages: KeyUsage[]): Promise<CryptoKey>;
 declare function importKey(format: Exclude<MlDsaKeyFormat, "jwk">, keyData: BufferSource, algorithm: MlDsaAlgorithm, extractable: boolean, usages: KeyUsage[]): Promise<CryptoKey>;
-export declare function getPublicKey(key: CryptoKey, usages: KeyUsage[]): CryptoKey;
+export declare function getPublicKey(key: CryptoKey, usages: KeyUsage[]): Promise<CryptoKey>;
 declare function verify(algorithm: MlDsaAlgorithm, key: CryptoKey, signature: BufferSource, message: BufferSource): Promise<boolean>;
 declare function sign(algorithm: MlDsaAlgorithm, key: CryptoKey, data: BufferSource): Promise<ArrayBuffer>;
 declare const mldsa: {

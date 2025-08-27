@@ -679,7 +679,10 @@ async function importKey(
   throw new MlDsaNotSupportedError("Unsupported key format");
 }
 
-export function getPublicKey(key: CryptoKey, usages: KeyUsage[]) {
+export async function getPublicKey(
+  key: CryptoKey,
+  usages: KeyUsage[]
+): Promise<CryptoKey> {
   if (!(key instanceof CryptoKey)) {
     throw new TypeError("Expected key to be an instance of CryptoKey");
   }
