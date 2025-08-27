@@ -915,6 +915,5 @@ var mldsa = {
 };
 var mldsa_default = mldsa;
 export {
-  mldsa_default as default,
-  getPublicKey
+  mldsa_default as default
 };
