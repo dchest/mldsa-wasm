@@ -1,0 +1,3 @@
+[submodule "src/mldsa-native"]
+	path = src/mldsa-native
+	url = https://github.com/pq-code-package/mldsa-native.git

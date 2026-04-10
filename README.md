@@ -2,7 +2,7 @@
 
 **ML-DSA-65, a post-quantum digital signature algorithm in WebAssembly.**
 
-This package provides a WebAssembly-based implementation of ML-DSA-65, based on [PQClean](https://github.com/PQClean/PQClean). It exposes a modern, WebCrypto-compatible API for key generation, signing, and verification, all bundled in a single JavaScript file with the WASM module inlined.
+This package provides a WebAssembly-based implementation of ML-DSA-65, based on [mldsa-native](https://github.com/pq-code-package/mldsa-native). It exposes a modern, WebCrypto-compatible API for key generation, signing, and verification, all bundled in a single JavaScript file with the WASM module inlined.
 
 ## Features
 
@@ -248,4 +248,4 @@ and pass them to WebAssembly for key generation and signing.
 ## License
 
 - WASM wrapper: MIT License
-- PQClean: See [pqclean/LICENSE](src/pqclean/LICENSE) (Public Domain)
+- mldsa-native: See [mldsa-native/LICENSE](src/mldsa-native/LICENSE)  (choice of MIT/Apache 2.0/etc.)

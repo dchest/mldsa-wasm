@@ -2,12 +2,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "pqclean/crypto_sign/ml-dsa-65/api.h"
+#include "mldsa-native/mldsa/mldsa_native.h"
 
 
 EMSCRIPTEN_KEEPALIVE
 int mldsa65_keypair(uint8_t *pk, uint8_t *sk, const uint8_t *seed) {
-    return PQCLEAN_MLDSA65_CLEAN_crypto_sign_keypair_seed(pk, sk, seed);
+    return crypto_sign_keypair_internal(pk, sk, seed);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -18,12 +18,22 @@ int mldsa65_sign(
     const uint8_t *sk,
     const uint8_t *randomness
 ) {
-    return PQCLEAN_MLDSA65_CLEAN_crypto_sign_signature_ctx_seed(
+    uint8_t pre[MLD_DOMAIN_SEPARATION_MAX_BYTES];
+    size_t pre_len;
+
+    pre_len = crypto_sign_prepare_domain_separation_prefix(pre, NULL, 0, ctx, ctxlen,
+                                                 MLD_PREHASH_NONE);
+    if (pre_len == 0) {
+        return MLD_ERR_FAIL;
+    }
+
+    return crypto_sign_signature_internal(
         sig, siglen,
         m, mlen,
-        ctx, ctxlen,
+        pre, pre_len,
+        randomness,
         sk,
-        randomness
+        0
     );
 }
 
@@ -34,7 +44,7 @@ int mldsa65_verify(
         const uint8_t *ctx, size_t ctxlen,
         const uint8_t *pk
 ) {
-    return PQCLEAN_MLDSA65_CLEAN_crypto_sign_verify_ctx(
+    return crypto_sign_verify(
         sig,  siglen,
         m, mlen,
         ctx, ctxlen,

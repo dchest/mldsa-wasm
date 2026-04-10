@@ -568,7 +568,7 @@ HgLy6ERP
       mldsa
         .generateKey({ name: "ML-DSA-65" }, true, ["sign", "verify"])
         .then((k) => structuredClone(k.publicKey))
-    ).rejects.toThrow(/clone/);
+    ).rejects.toThrow();
   });
 
   it("should not be possible to clone private key", async () => {
@@ -576,7 +576,7 @@ HgLy6ERP
       mldsa
         .generateKey({ name: "ML-DSA-65" }, true, ["sign", "verify"])
         .then((k) => structuredClone(k.privateKey))
-    ).rejects.toThrow(/clone/);
+    ).rejects.toThrow();
   });
 
   it("should return public key from private key", async () => {

@@ -1,7 +1,0 @@
-mldsa-wasm changes to ML-DSA-65 implementation:
-
-Modified https://github.com/PQClean/PQClean/tree/master/crypto_sign/ml-dsa-65
-Commit 2cc64716044832eea747234ddbffc06746ab815d
-
-Modifications are to replace randombytes() calls with pre-generated random seeds,
-and remove unused functions.
