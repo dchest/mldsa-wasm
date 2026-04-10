@@ -1,7 +1,8 @@
+export type MlDsaAlgorithmName = "ML-DSA-44" | "ML-DSA-65" | "ML-DSA-87";
 export type MlDsaAlgorithm = {
-    name: "ML-DSA-65";
+    name: MlDsaAlgorithmName;
     context?: BufferSource;
-} | "ML-DSA-65";
+} | MlDsaAlgorithmName;
 export type MlDsaKeyFormat = "raw-public" | "raw-seed" | "jwk" | "spki" | "pkcs8";
 export type ContextParams = {
     context: BufferSource;

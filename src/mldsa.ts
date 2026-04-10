@@ -1,28 +1,33 @@
 /**
- * ML-DSA-65, a post-quantum signature algorithm in WebAssembly,
- * based on PQClean <https://github.com/PQClean/PQClean>.
+ * ML-DSA, a post-quantum signature algorithm in WebAssembly,
+ * based on mldsa-native <https://github.com/pq-code-package/mldsa-native>.
  *
  * Provides an API compatible with the WebCrypto API proposed in
  * "Modern Algorithms in the Web Cryptography API,"
  * Draft Community Group Report, 11 August 2025:
  * <https://wicg.github.io/webcrypto-modern-algos/>.
  *
- * PQClean is in public domain / CC0 license:
- * https://github.com/PQClean/PQClean/blob/master/crypto_sign/ml-dsa-65/clean/LICENSE
+ * mldsa-native license:
+ * https://github.com/pq-code-package/mldsa-native/blob/main/LICENSE
  *
  * WASM wrapper license: MIT License
- * Copyright (c) 2025 Dmitry Chestnykh
+ * Copyright (c) 2026 Dmitry Chestnykh
  */
-import MLDSA65Module from "./build/wasm-module.js";
+import MLDSAModule from "./build/wasm-module.js";
 
-const ALGORITHM_NAME = "ML-DSA-65";
-const JWK_ALG = "ML-DSA-65";
+const ALGORITHM_NAMES = ["ML-DSA-44", "ML-DSA-65", "ML-DSA-87"];
+
+export type MlDsaAlgorithmName =
+  | "ML-DSA-44"
+  | "ML-DSA-65"
+  | "ML-DSA-87";
 
 export type MlDsaAlgorithm =
-  | { name: "ML-DSA-65"; context?: BufferSource }
-  | "ML-DSA-65";
+  | { name: MlDsaAlgorithmName; context?: BufferSource }
+  | MlDsaAlgorithmName;
 
-type MlDsaNormalizedAlgorithm = { name: "ML-DSA-65"; context?: BufferSource };
+type MlDsaNormalizedAlgorithm =
+  { name: MlDsaAlgorithmName; context?: BufferSource };
 
 const KEY_USAGES = ["sign", "verify"];
 
@@ -118,6 +123,7 @@ const keyIdKey = "_mldsa_wasm";
 const emptyToJSON = () => ({});
 
 function createKeyObject(
+  name: MlDsaAlgorithmName,
   type: "public" | "private",
   extractable: boolean,
   usages: KeyUsage[],
@@ -126,7 +132,7 @@ function createKeyObject(
   const key = {
     type,
     extractable,
-    algorithm: Object.freeze({ name: ALGORITHM_NAME }),
+    algorithm: Object.freeze({ name }),
     usages: Object.freeze(Array.from(usages)),
     [keyIdKey]: noClone, // to prevent structured cloning
   } as unknown as CryptoKey;
@@ -144,20 +150,22 @@ function createKeyObject(
 }
 
 function createPublicKey(
+  name: MlDsaAlgorithmName,
   publicKeyData: Uint8Array<ArrayBuffer>,
   usages: KeyUsage[]
 ): CryptoKey {
-  return createKeyObject("public", true, usages, { publicKeyData });
+  return createKeyObject(name, "public", true, usages, { publicKeyData });
 }
 
 function createPrivateKey(
+  name: MlDsaAlgorithmName,
   publicKeyData: Uint8Array<ArrayBuffer>,
   privateSeedData: Uint8Array<ArrayBuffer>,
   privateSecretKeyData: Uint8Array<ArrayBuffer>,
   extractable: boolean,
   usages: KeyUsage[]
 ): CryptoKey {
-  return createKeyObject("private", extractable, usages, {
+  return createKeyObject(name, "private", extractable, usages, {
     publicKeyData,
     privateSeedData,
     privateSecretKeyData,
@@ -186,9 +194,16 @@ function fromBase64url(base64url: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
-const PUBLICKEY_BYTES = 1952;
-const SECRETKEY_BYTES = 4032;
-const SIGNATURE_BYTES = 3309;
+const SIZES: Record<MlDsaAlgorithmName, {
+  publicKeyBytes: number;
+  secretKeyBytes: number;
+  signatureBytes: number
+}> = {
+  "ML-DSA-44": { publicKeyBytes: 1312, secretKeyBytes: 2560, signatureBytes: 2420 },
+  "ML-DSA-65": { publicKeyBytes: 1952, secretKeyBytes: 4032, signatureBytes: 3309 },
+  "ML-DSA-87": { publicKeyBytes: 2592, secretKeyBytes: 4896, signatureBytes: 4627 },
+}
+
 const KEYPAIR_SEED_BYTES = 32;
 const SIGN_RANDOM_BYTES = 32;
 
@@ -196,7 +211,7 @@ let _module: any | undefined;
 
 async function getModule() {
   if (!_module) {
-    _module = await MLDSA65Module();
+    _module = await MLDSAModule();
   }
   return _module;
 }
@@ -213,7 +228,7 @@ function normalizeAlgorithm(algorithm: unknown): MlDsaNormalizedAlgorithm {
         typeof algorithm.name === "string"
       ? algorithm.name.toUpperCase()
       : null;
-  if (name !== ALGORITHM_NAME) {
+  if (!name || !ALGORITHM_NAMES.includes(name)) {
     throw new TypeError("Unsupported algorithm");
   }
   const context =
@@ -222,17 +237,21 @@ function normalizeAlgorithm(algorithm: unknown): MlDsaNormalizedAlgorithm {
     "context" in algorithm
       ? (algorithm.context as BufferSource)
       : undefined;
-  return { name: ALGORITHM_NAME, context };
+
+  return { name, context } as MlDsaNormalizedAlgorithm;
 }
 
-async function internalGenerateKeyPair(coins: Uint8Array<ArrayBuffer>) {
+async function internalGenerateKeyPair(
+  name: MlDsaAlgorithmName,
+  coins: Uint8Array<ArrayBuffer>
+) {
   const module = await getModule();
   let pkPtr = 0,
     skPtr = 0,
     coinsPtr = 0;
   try {
-    pkPtr = module._malloc(PUBLICKEY_BYTES);
-    skPtr = module._malloc(SECRETKEY_BYTES);
+    pkPtr = module._malloc(SIZES[name].publicKeyBytes);
+    skPtr = module._malloc(SIZES[name].secretKeyBytes);
     coinsPtr = module._malloc(KEYPAIR_SEED_BYTES);
     if (pkPtr === 0 || skPtr === 0 || coinsPtr === 0) {
       throw new MlDsaOperationError("Memory allocation failed");
@@ -240,20 +259,26 @@ async function internalGenerateKeyPair(coins: Uint8Array<ArrayBuffer>) {
 
     module.HEAPU8.set(coins, coinsPtr);
 
-    const result = module._mldsa65_keypair(pkPtr, skPtr, coinsPtr);
+    const fn = name === "ML-DSA-44"
+      ? module._mldsa44_keypair
+      : name === "ML-DSA-65"
+      ? module._mldsa65_keypair
+      : module._mldsa87_keypair;
+
+    const result = fn(pkPtr, skPtr, coinsPtr);
     if (result !== 0) {
       throw new MlDsaOperationError("Key generation failed");
     }
 
-    const rawPublicKey = new Uint8Array(PUBLICKEY_BYTES);
-    const rawSecretKey = new Uint8Array(SECRETKEY_BYTES);
+    const rawPublicKey = new Uint8Array(SIZES[name].publicKeyBytes);
+    const rawSecretKey = new Uint8Array(SIZES[name].secretKeyBytes);
     const rawSeed = new Uint8Array(coins);
 
-    rawPublicKey.set(module.HEAPU8.subarray(pkPtr, pkPtr + PUBLICKEY_BYTES));
-    rawSecretKey.set(module.HEAPU8.subarray(skPtr, skPtr + SECRETKEY_BYTES));
+    rawPublicKey.set(module.HEAPU8.subarray(pkPtr, pkPtr + SIZES[name].publicKeyBytes));
+    rawSecretKey.set(module.HEAPU8.subarray(skPtr, skPtr + SIZES[name].secretKeyBytes));
 
-    module.HEAPU8.fill(0, pkPtr, pkPtr + PUBLICKEY_BYTES);
-    module.HEAPU8.fill(0, skPtr, skPtr + SECRETKEY_BYTES);
+    module.HEAPU8.fill(0, pkPtr, pkPtr + SIZES[name].publicKeyBytes);
+    module.HEAPU8.fill(0, skPtr, skPtr + SIZES[name].secretKeyBytes);
     module.HEAPU8.fill(0, coinsPtr, coinsPtr + KEYPAIR_SEED_BYTES);
 
     return { rawPublicKey, rawSecretKey, rawSeed };
@@ -269,7 +294,7 @@ async function generateKey(
   extractable: boolean,
   usages: KeyUsage[]
 ): Promise<CryptoKeyPair> {
-  normalizeAlgorithm(keyAlgorithm);
+  const alg = normalizeAlgorithm(keyAlgorithm);
 
   // 1. If usages contains a value which is not one of "sign" or "verify", then throw a SyntaxError.
   if (
@@ -284,12 +309,14 @@ async function generateKey(
   // 3. If the key generation step fails, then throw an OperationError.
   // (Handled by the internalGenerateKeyPair method)
   const { rawPublicKey, rawSecretKey, rawSeed } = await internalGenerateKeyPair(
+    alg.name,
     getRandomValues(new Uint8Array(KEYPAIR_SEED_BYTES))
   );
 
-  const publicKey = createPublicKey(rawPublicKey, ["verify"]);
+  const publicKey = createPublicKey(alg.name, rawPublicKey, ["verify"]);
 
   const privateKey = createPrivateKey(
+    alg.name,
     rawPublicKey,
     rawSeed,
     rawSecretKey,
@@ -305,20 +332,52 @@ async function generateKey(
 
 type DEREncoding = { fullLength: number; prefix: Uint8Array };
 
-const MLDSA65_SPKI: DEREncoding = {
-  fullLength: 1974,
-  prefix: new Uint8Array([
-    0x30, 0x82, 0x07, 0xb2, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
-    0x65, 0x03, 0x04, 0x03, 0x12, 0x03, 0x82, 0x07, 0xa1, 0x00,
-  ]),
+const MLDSA_SPKI: { [key in MlDsaAlgorithmName]: DEREncoding } = {
+  "ML-DSA-44": {
+    fullLength: 22 + SIZES["ML-DSA-44"].publicKeyBytes,
+    prefix: new Uint8Array([
+      0x30, 0x82, 0x05, 0x32, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+      0x65, 0x03, 0x04, 0x03, 0x11, 0x03, 0x82, 0x05, 0x21, 0x00,
+    ]),
+  },
+  "ML-DSA-65": {
+    fullLength: 22 + SIZES["ML-DSA-65"].publicKeyBytes,
+    prefix: new Uint8Array([
+      0x30, 0x82, 0x07, 0xb2, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+      0x65, 0x03, 0x04, 0x03, 0x12, 0x03, 0x82, 0x07, 0xa1, 0x00,
+    ]),
+  },
+  "ML-DSA-87": {
+    fullLength: 22 + SIZES["ML-DSA-87"].publicKeyBytes,
+    prefix: new Uint8Array([
+      0x30, 0x82, 0x0a, 0x32, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+      0x65, 0x03, 0x04, 0x03, 0x13, 0x03, 0x82, 0x0a, 0x21, 0x00,
+    ]),
+  }
 };
 
-const MLDSA65_PKCS8: DEREncoding = {
-  fullLength: 54,
-  prefix: new Uint8Array([
-    0x30, 0x34, 0x02, 0x01, 0x00, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48,
-    0x01, 0x65, 0x03, 0x04, 0x03, 0x12, 0x04, 0x22, 0x80, 0x20,
-  ]),
+const MLDSA_PKCS8: { [key in MlDsaAlgorithmName]: DEREncoding } = {
+  "ML-DSA-44": {
+    fullLength: 54,
+    prefix: new Uint8Array([
+      0x30, 0x34, 0x02, 0x01, 0x00, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48,
+      0x01, 0x65, 0x03, 0x04, 0x03, 0x11, 0x04, 0x22, 0x80, 0x20,
+    ])
+  },
+  "ML-DSA-65": {
+    fullLength: 54,
+    prefix: new Uint8Array([
+      0x30, 0x34, 0x02, 0x01, 0x00, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48,
+      0x01, 0x65, 0x03, 0x04, 0x03, 0x12, 0x04, 0x22, 0x80, 0x20,
+    ]),
+  },
+  "ML-DSA-87": {
+    fullLength: 54,
+    prefix: new Uint8Array([
+      0x30, 0x34, 0x02, 0x01, 0x00, 0x30, 0x0b, 0x06, 0x09, 0x60, 0x86, 0x48,
+      0x01, 0x65, 0x03, 0x04, 0x03, 0x13, 0x04, 0x22, 0x80, 0x20,
+    ]),
+  }
 };
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -372,7 +431,7 @@ async function exportKey(
   if (!(key instanceof CryptoKey)) {
     throw new TypeError("Expected key to be an instance of CryptoKey");
   }
-  normalizeAlgorithm(key.algorithm);
+  const alg = normalizeAlgorithm(key.algorithm);
   // 1. If the underlying cryptographic key material represented by the
   // [[handle]] internal slot of key cannot be accessed, then throw an
   // OperationError.
@@ -391,7 +450,7 @@ async function exportKey(
     // defined in [RFC5280] with the following properties:
     // Let result be the result of DER-encoding data.
     // Let result be data.
-    return rawToDer(MLDSA65_SPKI, getPublicKeyDataRef(key)).buffer; // copy
+    return rawToDer(MLDSA_SPKI[alg.name], getPublicKeyDataRef(key)).buffer; // copy
   }
 
   // 2. If format is "pkcs8":
@@ -408,7 +467,7 @@ async function exportKey(
     // [[handle]] internal slot of key using the seed-only format (using a
     // context-specific [0] primitive tag with an implicit encoding of OCTET STRING).
     // Let result be the result of DER-encoding data.
-    return rawToDer(MLDSA65_PKCS8, getPrivateKeyDataRef(key).privateSeedData)
+    return rawToDer(MLDSA_PKCS8[alg.name], getPrivateKeyDataRef(key).privateSeedData)
       .buffer; // copy
   }
 
@@ -443,7 +502,7 @@ async function exportKey(
       // Set the kty attribute of jwk to "AKP".
       kty: "AKP",
       // Set the alg attribute of jwk to the name member of normalizedAlgorithm.
-      alg: JWK_ALG,
+      alg: alg.name,
       // Set the pub attribute of jwk to the base64url encoded public key
       // corresponding to the [[handle]] internal slot of key.
       pub: toBase64url(getPublicKeyDataRef(key)),
@@ -501,7 +560,7 @@ async function importKey(
   extractable: boolean,
   usages: KeyUsage[]
 ): Promise<CryptoKey> {
-  normalizeAlgorithm(algorithm);
+  const alg = normalizeAlgorithm(algorithm);
   // 1. If format is "spki":
   if (format === "spki") {
     // If usages contains a value which is not "verify" then throw a SyntaxError.
@@ -510,11 +569,11 @@ async function importKey(
     }
     // Let spki be the result of running the parse a subjectPublicKeyInfo algorithm over keyData.
     // If an error occurred while parsing, then throw a DataError.
-    const data = derToRaw(MLDSA65_SPKI, bufferSourcetoUint8Array(keyData));
-    if (data.length !== PUBLICKEY_BYTES) {
+    const data = derToRaw(MLDSA_SPKI[alg.name], bufferSourcetoUint8Array(keyData));
+    if (data.length !== SIZES[alg.name].publicKeyBytes) {
       throw new MlDsaDataError("Invalid key length");
     }
-    return createPublicKey(data, usages);
+    return createPublicKey(alg.name, data, usages);
   }
 
   // 1. If format is "pkcs8":
@@ -524,13 +583,14 @@ async function importKey(
       throw new SyntaxError("Invalid key usages for private key");
     }
     // TODO: allow more bytes for keys that have both seed and privateKey.
-    const data = derToRaw(MLDSA65_PKCS8, bufferSourcetoUint8Array(keyData));
+    const data = derToRaw(MLDSA_PKCS8[alg.name], bufferSourcetoUint8Array(keyData));
     if (data.length !== KEYPAIR_SEED_BYTES) {
       throw new MlDsaDataError("Invalid key length");
     }
     const { rawPublicKey, rawSecretKey, rawSeed } =
-      await internalGenerateKeyPair(data);
+      await internalGenerateKeyPair(alg.name, data);
     return createPrivateKey(
+      alg.name,
       rawPublicKey,
       rawSeed,
       rawSecretKey,
@@ -546,7 +606,7 @@ async function importKey(
       throw new SyntaxError("Invalid key usages for public key");
     }
     const data = bufferSourcetoUint8ArrayCopy(keyData);
-    return createPublicKey(data, usages);
+    return createPublicKey(alg.name, data, usages);
   }
   // 1. If format is "raw-seed":
   if (format === "raw-seed") {
@@ -564,8 +624,9 @@ async function importKey(
     // function described in Section 6.1 of [FIPS-204] with the parameter set
     // indicated by the name member of normalizedAlgorithm, using data as ξ.
     const { rawPublicKey, rawSecretKey, rawSeed } =
-      await internalGenerateKeyPair(data);
+      await internalGenerateKeyPair(alg.name, data);
     return createPrivateKey(
+      alg.name,
       rawPublicKey,
       rawSeed,
       rawSecretKey,
@@ -599,7 +660,7 @@ async function importKey(
     }
     // If the alg field of jwk is not equal to the name member of normalizedAlgorithm,
     // then throw a DataError.
-    if (jwk.alg !== JWK_ALG) {
+    if (jwk.alg !== alg.name) {
       throw new MlDsaDataError("Invalid algorithm");
     }
     // If usages is non-empty and the use field of jwk is present and is not equal to "sig",
@@ -639,9 +700,10 @@ async function importKey(
         // private key identified by interpreting the priv attribute of
         // jwk as a base64url encoded seed.
         const { rawPublicKey, rawSecretKey, rawSeed } =
-          await internalGenerateKeyPair(seedData);
+          await internalGenerateKeyPair(alg.name, seedData);
         // Set the [[type]] internal slot of Key to "private".
         const key = createPrivateKey(
+          alg.name,
           rawPublicKey,
           rawSeed,
           rawSecretKey,
@@ -664,13 +726,13 @@ async function importKey(
       // throw a DataError.
       try {
         const publicKeyData = fromBase64url(jwk.pub);
-        if (publicKeyData.length !== PUBLICKEY_BYTES) {
+        if (publicKeyData.length !== SIZES[alg.name].publicKeyBytes) {
           throw new MlDsaDataError("Invalid public key data");
         }
         // Let key be a new CryptoKey object that represents the
         // ML-DSA public key identified by interpreting the pub attribute of
         // jwk as a base64url encoded public key.
-        return createPublicKey(publicKeyData, usages);
+        return createPublicKey(alg.name, publicKeyData, usages);
       } catch {
         throw new MlDsaDataError("Invalid public key format");
       }
@@ -686,7 +748,7 @@ async function getPublicKey(
   if (!(key instanceof CryptoKey)) {
     throw new TypeError("Expected key to be an instance of CryptoKey");
   }
-  normalizeAlgorithm(key.algorithm);
+  const alg = normalizeAlgorithm(key.algorithm);
   if (key.type !== "private") {
     throw new MlDsaInvalidAccessError("Expected key type to be 'private'");
   }
@@ -697,7 +759,7 @@ async function getPublicKey(
   if (!keyData.publicKeyData) {
     throw new MlDsaOperationError("Failed to get public key data");
   }
-  return createPublicKey(new Uint8Array(keyData.publicKeyData), usages);
+  return createPublicKey(alg.name, new Uint8Array(keyData.publicKeyData), usages);
 }
 
 async function verify(
@@ -707,7 +769,7 @@ async function verify(
   message: BufferSource
 ) {
   const module = await getModule();
-  const normAlgo = normalizeAlgorithm(algorithm);
+  const alg = normalizeAlgorithm(algorithm);
 
   if (!(key instanceof CryptoKey) || key.type !== "public") {
     throw new MlDsaInvalidAccessError(
@@ -719,16 +781,16 @@ async function verify(
   }
 
   const publicKeyData = getPublicKeyDataRef(key);
-  if (!publicKeyData || publicKeyData.length !== PUBLICKEY_BYTES) {
+  if (!publicKeyData || publicKeyData.length !== SIZES[alg.name].publicKeyBytes) {
     throw new MlDsaOperationError("Invalid public key");
   }
 
   const sig = bufferSourcetoUint8Array(signature);
-  if (sig.length !== SIGNATURE_BYTES) {
+  if (sig.length !== SIZES[alg.name].signatureBytes) {
     return false;
   }
-  const ctx = normAlgo.context
-    ? bufferSourcetoUint8Array(normAlgo.context)
+  const ctx = alg.context
+    ? bufferSourcetoUint8Array(alg.context)
     : null;
   const ctxLen = ctx == null ? 0 : ctx.length;
   if (ctxLen > 255) {
@@ -743,8 +805,8 @@ async function verify(
     pkPtr = 0,
     ctxPtr = 0;
   try {
-    sigPtr = module._malloc(SIGNATURE_BYTES);
-    pkPtr = module._malloc(PUBLICKEY_BYTES);
+    sigPtr = module._malloc(SIZES[alg.name].signatureBytes);
+    pkPtr = module._malloc(SIZES[alg.name].publicKeyBytes);
     msgPtr = module._malloc(msgLen);
     ctxPtr = ctxLen > 0 ? module._malloc(ctxLen) : 0;
     if (
@@ -771,10 +833,15 @@ async function verify(
         const uint8_t *pk
     )
     */
+   const fn = alg.name === "ML-DSA-44"
+      ? module._mldsa44_verify
+      : alg.name === "ML-DSA-65"
+      ? module._mldsa65_verify
+      : module._mldsa87_verify;
 
-    const result = module._mldsa65_verify(
+    const result = fn(
       sigPtr,
-      SIGNATURE_BYTES,
+      SIZES[alg.name].signatureBytes,
       msgPtr,
       msgLen,
       ctxPtr,
@@ -797,7 +864,7 @@ async function sign(
   data: BufferSource
 ) {
   const module = await getModule();
-  const normAlgo = normalizeAlgorithm(algorithm);
+  const alg = normalizeAlgorithm(algorithm);
 
   if (!(key instanceof CryptoKey) || key.type !== "private") {
     throw new MlDsaInvalidAccessError(
@@ -809,11 +876,11 @@ async function sign(
   }
 
   const secretKeyData = getPrivateKeyDataRef(key).privateSecretKeyData;
-  if (!secretKeyData || secretKeyData.length !== SECRETKEY_BYTES) {
+  if (!secretKeyData || secretKeyData.length !== SIZES[alg.name].secretKeyBytes) {
     throw new Error("Invalid secret key");
   }
 
-  const context = normAlgo.context ?? new Uint8Array(0);
+  const context = alg.context ?? new Uint8Array(0);
   const ctx = bufferSourcetoUint8Array(context);
   const ctxLen = ctx.length;
   if (ctxLen > 255) {
@@ -830,9 +897,9 @@ async function sign(
     ctxPtr = 0,
     msgPtr = 0;
   try {
-    skPtr = module._malloc(SECRETKEY_BYTES);
+    skPtr = module._malloc(SIZES[alg.name].secretKeyBytes);
     rndPtr = module._malloc(SIGN_RANDOM_BYTES);
-    sigPtr = module._malloc(SIGNATURE_BYTES);
+    sigPtr = module._malloc(SIZES[alg.name].signatureBytes);
     ctxPtr = module._malloc(ctxLen);
     msgPtr = module._malloc(msgLen);
     if (
@@ -859,9 +926,14 @@ async function sign(
       const uint8_t *randomness
     )
     */
-    const result = module._mldsa65_sign(
+    const fn = alg.name === "ML-DSA-44"
+      ? module._mldsa44_sign
+      : alg.name === "ML-DSA-65"
+      ? module._mldsa65_sign
+      : module._mldsa87_sign;
+    const result = fn(
       sigPtr,
-      SIGNATURE_BYTES,
+      SIZES[alg.name].signatureBytes,
       msgPtr,
       msgLen,
       ctxPtr,
@@ -873,10 +945,10 @@ async function sign(
       throw new MlDsaOperationError("Signing failed");
     }
 
-    const signature = new Uint8Array(SIGNATURE_BYTES);
-    signature.set(module.HEAPU8.subarray(sigPtr, sigPtr + SIGNATURE_BYTES));
+    const signature = new Uint8Array(SIZES[alg.name].signatureBytes);
+    signature.set(module.HEAPU8.subarray(sigPtr, sigPtr + SIZES[alg.name].signatureBytes));
 
-    module.HEAPU8.fill(0, skPtr, skPtr + SECRETKEY_BYTES);
+    module.HEAPU8.fill(0, skPtr, skPtr + SIZES[alg.name].secretKeyBytes);
     module.HEAPU8.fill(0, rndPtr, rndPtr + SIGN_RANDOM_BYTES);
     randomness.fill(0);
 

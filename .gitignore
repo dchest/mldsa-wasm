@@ -2,6 +2,7 @@
 *.wasm
 *.js.map
 *.o
+*.d
 
 # OS files
 .DS_Store

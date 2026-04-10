@@ -18,9 +18,15 @@ declare namespace RuntimeExports {
     function stackRestore(val: any): any;
 }
 interface WasmModule {
+  _mldsa44_keypair(_0: number, _1: number, _2: number): number;
+  _mldsa44_sign(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number): number;
+  _mldsa44_verify(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number): number;
   _mldsa65_keypair(_0: number, _1: number, _2: number): number;
   _mldsa65_sign(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number): number;
   _mldsa65_verify(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number): number;
+  _mldsa87_keypair(_0: number, _1: number, _2: number): number;
+  _mldsa87_sign(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number, _7: number): number;
+  _mldsa87_verify(_0: number, _1: number, _2: number, _3: number, _4: number, _5: number, _6: number): number;
   _free(_0: number): void;
   _malloc(_0: number): number;
 }

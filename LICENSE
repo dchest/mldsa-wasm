@@ -1,5 +1,8 @@
-Copyright (c) 2025 Dmitry Chestnykh (WASM wrapper, JavaScript)
-PQClean: Public domain / CC0 license
+Copyright (c) 2026 Dmitry Chestnykh (WASM wrapper, JavaScript)
+Copyright (c) The mldsa-native project authors
+Copyright (c) The mlkem-native project authors
+Copyright (c) 2020 Dougall Johnson
+Copyright (c) 2022 Arm Limited
 SPDX-License-Identifier: MIT
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

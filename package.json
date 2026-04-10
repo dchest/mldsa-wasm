@@ -1,7 +1,7 @@
 {
   "name": "mldsa-wasm",
-  "version": "0.0.3",
-  "description": "ML-DSA-65 implementation using WebAssembly in a single JS file based on PQClean",
+  "version": "0.0.4",
+  "description": "ML-DSA implementation using WebAssembly in a single JS file based on mldsa-native",
   "main": "dist/mldsa.js",
   "module": "dist/mldsa.js",
   "type": "module",

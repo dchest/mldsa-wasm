@@ -1,17 +1,17 @@
 # mldsa-wasm
 
-**ML-DSA-65, a post-quantum digital signature algorithm in WebAssembly.**
+**ML-DSA, a post-quantum digital signature algorithm in WebAssembly.**
 
-This package provides a WebAssembly-based implementation of ML-DSA-65, based on [mldsa-native](https://github.com/pq-code-package/mldsa-native). It exposes a modern, WebCrypto-compatible API for key generation, signing, and verification, all bundled in a single JavaScript file with the WASM module inlined.
+This package provides a WebAssembly-based implementation of ML-DSA, based on [mldsa-native](https://github.com/pq-code-package/mldsa-native). It exposes a modern, WebCrypto-compatible API for key generation, signing, and verification, all bundled in a single JavaScript file with the WASM module inlined.
 
 ## Features
 
 - API compatible with the [WebCrypto API draft for modern algorithms](https://wicg.github.io/webcrypto-modern-algos/) (when it ships, replace `mldsa` with `crypto.subtle` and burn this package).
 - All code and WASM are bundled into a single `dist/mldsa.js` ES module (no external `.wasm` files needed).
 - Works in browsers and Node.js, and should work everywhere WebAssembly is supported.
-- Smallish: 63 KB unminified .js (21 KB gzipped / 17 KB brotlied).
-- Fast: signing at 2800 ops/sec, verifying at 10500 ops/sec on MacBook Air M1.
-- A single, most common ML-DSA-65 algorithm, so there's no need to choose between 44, 65, and 87!
+- 192 KB unminified .js (43 KB gzipped / 33 KB brotlied).
+- Fast: signing at 3300 ops/sec, verifying at 11900 ops/sec on MacBook Air M1 for ML-DSA-65.
+- All ML-DSA variants: ML-DSA-44, ML-DSA-65, and ML-DSA-87.
 
 Use it as a stopgap solution until the [WebCrypto API supports ML-DSA natively](https://wicg.github.io/webcrypto-modern-algos/).
 
@@ -153,6 +153,8 @@ SPKI and PKCS8 formats are also supported.
 
 All API methods are asynchronous and return Promises. See [Modern Algorithms in the Web Cryptography API](https://wicg.github.io/webcrypto-modern-algos/) for details.
 
+Types are given for ML-DSA-65, but the same methods work for ML-DSA-44 and ML-DSA-87:
+
 ### `mldsa.generateKey(algorithm, extractable, usages)`
 
 - **algorithm**: `{ name: "ML-DSA-65" }` or `"ML-DSA-65"`
@@ -227,23 +229,46 @@ Since the WebCrypto API draft is still evolving, this library may need updates t
 
 ### Build
 
+- Fetch mldsa-native sources**
+   - The sources are included as a git submodule in `src/mldsa-native/`.
+   - To initialize and update the submodule, run:
+     ```sh
+     git submodule update --init --recursive
+     ```
 - Run:
   ```sh
   npm run build
   ```
-- This uses Emscripten to compile C sources, which puts the result into `src/build/wasm-module.js` (WASM inlined as base64).
+- This uses Emscripten to compile C sources, which puts the result into `src/build/wasm-module.js` (WASM inlined).
 - Creates a single distributable file by combining `src/build/wasm-module.js` and `src/mldsa.ts` using `esbuild`, resulting in `dist/mldsa.js`.
 - Creates TypeScript types in `types/mldsa.d.ts` by running `tsc`.
-
-Note: we have an internal copy of PQClean's `ml-dsa-65` implementation, modified to accept
-seeds instead of calling `randombytes()`. We generate seeds using `crypto.getRandomValues()`
-and pass them to WebAssembly for key generation and signing.
 
 ## Distribution
 
 - The entire library is distributed as a single-file ES module: `dist/mldsa.js`.
-- The WASM module is inlined as base64, so no external files are needed.
+- The WASM module is inlined, so no external files are needed.
 - TypeScript types are in `types/mldsa.d.ts`.
+
+
+## Supply chain security
+
+_Fupply fain fufurity_. The whole WASM module is a scary-looking opaque encoded blob,
+compiled by me from the code I got from GitHub (apparently used by AWS' Cryptography library
+and other popular projects), npm-installed by you from the internets. I made this library
+for my project and happily share it with you.
+
+Nobody checks every line of code they `npm install`, instead they like to check checkboxes.
+
+Here are some checkboxes:
+
+- [x] `mldsa-native` is included as a git submodule instead of importing it directly into the source.
+- [x] there are no modifications to the original `mldsa-native` code.
+- [x] there are 0 (zero) non-dev dependencies in `package.json`.
+- [x] the JavaScript code is not minified.
+- [x] build artifacts (except for .o) are committed to the repository.
+- [x] hardware security key is used for npm authentication when publishing.
+
+If your company wants to pay to get some other checkboxes from me, please contact me directly.
 
 ## License
 

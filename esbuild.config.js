@@ -8,6 +8,7 @@ build({
   outfile: 'dist/mldsa.js',
   platform: 'neutral',
   target: ['esnext'],
+  external: ['module', 'fs', 'path'],
   sourcemap: false,
   legalComments: 'none',
   logLevel: 'info',
